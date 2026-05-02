@@ -4,17 +4,22 @@ const mongoose = require('mongoose');
 const userSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: true    // name is compulsory
+    required: true
   },
   email: {
     type: String,
     required: true,
-    unique: true      // no two users can have same email
+    unique: true
   },
   password: {
     type: String,
     required: true
+  },
+  role: {
+    type: String,
+    enum: ['user', 'admin'],  // only these 2 values allowed
+    default: 'user'           // everyone starts as 'user'
   }
-}, { timestamps: true }); // auto saves date & time
+}, { timestamps: true });
 
 module.exports = mongoose.model('User', userSchema);

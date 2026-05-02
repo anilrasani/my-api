@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>My API Dashboard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; background: #f0f2f5; }
+
+    .navbar {
+      background: #2c3e50; color: white;
+      padding: 15px 30px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .navbar h1 { font-size: 20px; }
+    .navbar button {
+      background: #e74c3c; color: white;
+      border: none; padding: 8px 16px;
+      border-radius: 5px; cursor: pointer;
+    }
+
+    .container { max-width: 900px; margin: 30px auto; padding: 0 20px; }
+
+    .card {
+      background: white; border-radius: 10px;
+      padding: 25px; margin-bottom: 20px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    .card h2 { margin-bottom: 15px; color: #2c3e50; }
+
+    input, textarea {
+      width: 100%; padding: 10px;
+      margin: 8px 0; border: 1px solid #ddd;
+      border-radius: 5px; font-size: 14px;
+    }
+    button {
+      background: #3498db; color: white;
+      border: none; padding: 10px 20px;
+      border-radius: 5px; cursor: pointer;
+      margin: 5px 5px 5px 0;
+      font-size: 14px;
+    }
+    button:hover { opacity: 0.9; }
+    button.danger { background: #e74c3c; }
+    button.success { background: #2ecc71; }
+
+    .message {
+      padding: 10px; border-radius: 5px;
+      margin: 10px 0; font-size: 14px;
+    }
+    .message.success { background: #d4edda; color: #155724; }
+    .message.error { background: #f8d7da; color: #721c24; }
+
+    .note-item {
+      background: #f8f9fa; border-radius: 8px;
+      padding: 15px; margin: 10px 0;
+      border-left: 4px solid #3498db;
+    }
+    .note-item h4 { color: #2c3e50; margin-bottom: 5px; }
+    .note-item p { color: #666; font-size: 14px; }
+    .note-actions { margin-top: 10px; }
+
+    .tabs { display: flex; margin-bottom: 20px; }
+    .tab {
+      padding: 10px 20px; cursor: pointer;
+      border: none; background: #ddd;
+      margin-right: 5px; border-radius: 5px;
+    }
+    .tab.active { background: #3498db; color: white; }
+
+    #dashboard { display: none; }
+    #authSection { display: block; }
+  </style>
+</head>
+<body>
+
+<div class="navbar">
+  <h1>🚀 API Dashboard</h1>
+  <button onclick="logout()" id="logoutBtn" style="display:none">Logout</button>
+</div>
+
+<div class="container">
+
+  <!-- AUTH SECTION -->
+  <div id="authSection">
+    <div class="tabs">
+      <button class="tab active" onclick="showTab('login')">Login</button>
+      <button class="tab" onclick="showTab('register')">Register</button>
+    </div>
+
+    <!-- Login -->
+    <div id="loginTab" class="card">
+      <h2>🔐 Login</h2>
+      <input type="email" id="loginEmail" placeholder="Email" />
+      <input type="password" id="loginPassword" placeholder="Password" />
+      <button onclick="login()">Login</button>
+      <div id="loginMsg"></div>
+    </div>
+
+    <!-- Register -->
+    <div id="registerTab" class="card" style="display:none">
+      <h2>📝 Register</h2>
+      <input type="text" id="regName" placeholder="Full Name" />
+      <input type="email" id="regEmail" placeholder="Email" />
+      <input type="password" id="regPassword" placeholder="Password (min 6 chars)" />
+      <button onclick="register()">Register</button>
+      <div id="registerMsg"></div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD SECTION -->
+  <div id="dashboard">
+    <div class="card">
+      <h2>👋 Welcome, <span id="userName"></span>!</h2>
+      <p>Role: <strong id="userRole"></strong></p>
+    </div>
+
+    <!-- Create Note -->
+    <div class="card">
+      <h2>➕ Create Note</h2>
+      <input type="text" id="noteTitle" placeholder="Note Title" />
+      <textarea id="noteContent" placeholder="Note Content" rows="3"></textarea>
+      <button class="success" onclick="createNote()">Create Note</button>
+      <div id="createMsg"></div>
+    </div>
+
+    <!-- All Notes -->
+    <div class="card">
+      <h2>📋 My Notes</h2>
+      <button onclick="getNotes()">🔄 Refresh Notes</button>
+      <div id="notesList"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const API = 'http://localhost:5000/api/v1';
+  let token = localStorage.getItem('token') || '';
+  let currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+
+  // Check if already logged in
+  if (token) showDashboard();
+
+  function showTab(tab) {
+    document.getElementById('loginTab').style.display = tab === 'login' ? 'block' : 'none';
+    document.getElementById('registerTab').style.display = tab === 'register' ? 'block' : 'none';
+    document.querySelectorAll('.tab').forEach((t, i) => {
+      t.classList.toggle('active', (tab === 'login' && i === 0) || (tab === 'register' && i === 1));
+    });
+  }
+
+  function showMsg(id, msg, type) {
+    const el = document.getElementById(id);
+    el.className = `message ${type}`;
+    el.textContent = msg;
+  }
+
+  async function register() {
+    const name = document.getElementById('regName').value;
+    const email = document.getElementById('regEmail').value;
+    const password = document.getElementById('regPassword').value;
+
+    try {
+      const res = await fetch(`${API}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showMsg('registerMsg', '✅ Registered! Please login.', 'success');
+        showTab('login');
+      } else {
+        showMsg('registerMsg', data.message || 'Registration failed', 'error');
+      }
+    } catch (err) {
+      showMsg('registerMsg', 'Server error!', 'error');
+    }
+  }
+
+  async function login() {
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
+
+    try {
+      const res = await fetch(`${API}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        token = data.token;
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify({ role: data.role, email }));
+        currentUser = { role: data.role, email };
+        showDashboard();
+        getNotes();
+      } else {
+        showMsg('loginMsg', data.message || 'Login failed', 'error');
+      }
+    } catch (err) {
+      showMsg('loginMsg', 'Server error!', 'error');
+    }
+  }
+
+  function showDashboard() {
+    document.getElementById('authSection').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    document.getElementById('logoutBtn').style.display = 'block';
+    document.getElementById('userRole').textContent = currentUser.role || 'user';
+    document.getElementById('userName').textContent = currentUser.email || 'User';
+    getNotes();
+  }
+
+  function logout() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    token = '';
+    document.getElementById('authSection').style.display = 'block';
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('logoutBtn').style.display = 'none';
+  }
+
+  async function createNote() {
+    const title = document.getElementById('noteTitle').value;
+    const content = document.getElementById('noteContent').value;
+
+    try {
+      const res = await fetch(`${API}/notes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ title, content })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showMsg('createMsg', '✅ Note created!', 'success');
+        document.getElementById('noteTitle').value = '';
+        document.getElementById('noteContent').value = '';
+        getNotes();
+      } else {
+        showMsg('createMsg', data.message || 'Failed to create note', 'error');
+      }
+    } catch (err) {
+      showMsg('createMsg', 'Server error!', 'error');
+    }
+  }
+
+  async function getNotes() {
+    try {
+      const res = await fetch(`${API}/notes`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      const list = document.getElementById('notesList');
+
+      if (res.ok && data.length > 0) {
+        list.innerHTML = data.map(note => `
+          <div class="note-item">
+            <h4>${note.title}</h4>
+            <p>${note.content}</p>
+            <div class="note-actions">
+              <button class="danger" onclick="deleteNote('${note._id}')">🗑️ Delete</button>
+            </div>
+          </div>
+        `).join('');
+      } else {
+        list.innerHTML = '<p>No notes yet. Create one above! 😊</p>';
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function deleteNote(id) {
+    try {
+      const res = await fetch(`${API}/notes/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) getNotes();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+</script>
+
+</body>
+</html>
